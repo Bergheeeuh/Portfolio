@@ -2494,7 +2494,7 @@ function renderWeeklyReturns() {
         {ticker:'BMNR',    name:'Bitmine Immersion Technologies',          type:'stock', currency:'USD', broker:'Bolero', gak:54.92,  aantal:66},
 
         // ── DEGIRO — aandelen ───────────────────────────────────────────────
-        {ticker:'ABCL',    name:'AbCellera Biologics',        type:'stock', currency:'USD', broker:'Degiro', gak:3.59,   aantal:886},
+        {ticker:'ABCL',    name:'AbCellera Biologics',        type:'stock', currency:'USD', broker:'Degiro', gak:4.07,   aantal:1386},
         {ticker:'AMZN',    name:'Amazon.com',           type:'stock', currency:'USD', broker:'Degiro', gak:219.77, aantal:11},
         {ticker:'APLD',    name:'Applied Digital Corporation',  type:'stock', currency:'USD', broker:'Degiro', gak:4.19,   aantal:184},
         {ticker:'ACHR',    name:'Archer Aviation',  type:'stock', currency:'USD', broker:'Degiro', gak:9.50,   aantal:60},
