@@ -2501,7 +2501,7 @@ function renderWeeklyReturns() {
         {ticker:'CRCL',    name:'Circle Internet Group',           type:'stock', currency:'USD', broker:'Degiro', gak:105.47, aantal:16},
         {ticker:'CRWV',    name:'CoreWeave',        type:'stock', currency:'USD', broker:'Degiro', gak:88.17,  aantal:31},
         {ticker:'CRDO',    name:'Credo Technology Group',            type:'stock', currency:'USD', broker:'Degiro', gak:118.16, aantal:21},
-        {ticker:'IONQ',    name:'IonQ',             type:'stock', currency:'USD', broker:'Degiro', gak:27.43,  aantal:42},
+        {ticker:'IONQ',    name:'IonQ',             type:'stock', currency:'USD', broker:'Degiro', gak:35.63,  aantal:66},
         {ticker:'KEEL',    name:'Keel Infrastructure Corporation',             type:'stock', currency:'USD', broker:'Degiro', gak:1.98,   aantal:1730},
         {ticker:'LMND',    name:'Lemonade',         type:'stock', currency:'USD', broker:'Degiro', gak:32.50,  aantal:7},
         {ticker:'MRLN',    name:'Merlin',           type:'stock', currency:'USD', broker:'Degiro', gak:7.89,   aantal:299},
@@ -4080,7 +4080,7 @@ function renderApFromEnriched(allEnriched) {
 
 // Cash per broker — eigen state op AANDELEN pagina (los van DATA → CASH pagina)
 // Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt)
-let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 5291, Saxo: 2106 };
+let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 4263, Saxo: 2106 };
 function saveApCash() { localStorage.setItem('ap_cash_v3', JSON.stringify(_apCash)); }
 
 function getCashForBroker(broker) {
