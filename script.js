@@ -2522,7 +2522,6 @@ function renderWeeklyReturns() {
         // ── SAXO — aandelen ─────────────────────────────────────────────────
         {ticker:'QBTS',    name:'D-Wave',           type:'stock', currency:'USD', broker:'Saxo',   gak:15.07,  aantal:50},
         {ticker:'IREN',    name:'IREN',             type:'stock', currency:'USD', broker:'Saxo',   gak:39.28,  aantal:301},
-        {ticker:'JD',      name:'JD.com',           type:'stock', currency:'USD', broker:'Saxo',   gak:33.82,  aantal:29},
         {ticker:'CIFR',    name:'Cipher Digital Corporation',   type:'stock', currency:'USD', broker:'Saxo',   gak:14.66,  aantal:245},
         {ticker:'CLSK',    name:'CleanSpark',       type:'stock', currency:'USD', broker:'Saxo',   gak:13.17,  aantal:165},
         {ticker:'BKKT',    name:'Bakkt',            type:'stock', currency:'USD', broker:'Saxo',   gak:13.32,  aantal:169},
@@ -4079,7 +4078,7 @@ function renderApFromEnriched(allEnriched) {
 
 // Cash per broker — eigen state op AANDELEN pagina (los van DATA → CASH pagina)
 // Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt)
-let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 4635, Saxo: 2106 };
+let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 4635, Saxo: 2838 };
 function saveApCash() { localStorage.setItem('ap_cash_v3', JSON.stringify(_apCash)); }
 
 function getCashForBroker(broker) {
