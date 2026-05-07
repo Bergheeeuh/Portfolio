@@ -2520,7 +2520,7 @@ function renderWeeklyReturns() {
         {ticker:'3HCL.L',  name:'WisdomTree Copper 3x Daily Leveraged',     type:'etf',   currency:'USD', broker:'Degiro', gak:16.50,  aantal:140},
 
         // ── SAXO — aandelen ─────────────────────────────────────────────────
-        {ticker:'QBTS',    name:'D-Wave',           type:'stock', currency:'USD', broker:'Saxo',   gak:15.07,  aantal:50},
+        {ticker:'QBTS',    name:'D-Wave',           type:'stock', currency:'USD', broker:'Saxo',   gak:18.2,  aantal:80},
         {ticker:'IREN',    name:'IREN',             type:'stock', currency:'USD', broker:'Saxo',   gak:39.28,  aantal:301},
         {ticker:'CIFR',    name:'Cipher Digital Corporation',   type:'stock', currency:'USD', broker:'Saxo',   gak:14.66,  aantal:245},
         {ticker:'CLSK',    name:'CleanSpark',       type:'stock', currency:'USD', broker:'Saxo',   gak:13.17,  aantal:165},
@@ -4076,8 +4076,8 @@ function renderApFromEnriched(allEnriched) {
 }
 
 // Cash per broker — eigen state op AANDELEN pagina (los van DATA → CASH pagina)
-// Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt)
-let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 2596, Saxo: 3152 };
+// Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt, DATA BROKER)
+let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 2596, Saxo: 2555 };
 function saveApCash() { localStorage.setItem('ap_cash_v3', JSON.stringify(_apCash)); }
 
 function getCashForBroker(broker) {
