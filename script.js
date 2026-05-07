@@ -2507,7 +2507,6 @@ function renderWeeklyReturns() {
         {ticker:'MRLN',    name:'Merlin',           type:'stock', currency:'USD', broker:'Degiro', gak:7.89,   aantal:299},
         {ticker:'MSFT',    name:'Microsoft Corporation',        type:'stock', currency:'USD', broker:'Degiro', gak:395.47, aantal:12},
         {ticker:'OUST',    name:'Ouster',           type:'stock', currency:'USD', broker:'Degiro', gak:24.60,  aantal:24},
-        {ticker:'RR',      name:'Richtech Robotics',         type:'stock', currency:'USD', broker:'Degiro', gak:3.60,   aantal:162},
         {ticker:'SBET',    name:'SharpLink',        type:'stock', currency:'USD', broker:'Degiro', gak:21.26,  aantal:55},
         {ticker:'SOI.PA',  name:'Soitec SA',           type:'stock', currency:'EUR', broker:'Degiro', gak:64.16,  aantal:16},
         {ticker:'TOYO',    name:'Toyo Co',             type:'stock', currency:'USD', broker:'Degiro', gak:9.00,   aantal:66},
@@ -4080,7 +4079,7 @@ function renderApFromEnriched(allEnriched) {
 
 // Cash per broker — eigen state op AANDELEN pagina (los van DATA → CASH pagina)
 // Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt)
-let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 4263, Saxo: 2106 };
+let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 4635, Saxo: 2106 };
 function saveApCash() { localStorage.setItem('ap_cash_v3', JSON.stringify(_apCash)); }
 
 function getCashForBroker(broker) {
