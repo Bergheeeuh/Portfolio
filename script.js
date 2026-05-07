@@ -2504,7 +2504,7 @@ function renderWeeklyReturns() {
         {ticker:'IONQ',    name:'IonQ',             type:'stock', currency:'USD', broker:'Degiro', gak:35.63,  aantal:66},
         {ticker:'KEEL',    name:'Keel Infrastructure Corporation',             type:'stock', currency:'USD', broker:'Degiro', gak:1.98,   aantal:1730},
         {ticker:'LMND',    name:'Lemonade',         type:'stock', currency:'USD', broker:'Degiro', gak:32.50,  aantal:7},
-        {ticker:'MRLN',    name:'Merlin',           type:'stock', currency:'USD', broker:'Degiro', gak:7.89,   aantal:299},
+        {ticker:'MRLN',    name:'Merlin',           type:'stock', currency:'USD', broker:'Degiro', gak:8.22,   aantal:577},
         {ticker:'MSFT',    name:'Microsoft Corporation',        type:'stock', currency:'USD', broker:'Degiro', gak:395.47, aantal:12},
         {ticker:'OUST',    name:'Ouster',           type:'stock', currency:'USD', broker:'Degiro', gak:24.60,  aantal:24},
         {ticker:'SBET',    name:'SharpLink',        type:'stock', currency:'USD', broker:'Degiro', gak:21.26,  aantal:55},
@@ -2529,7 +2529,6 @@ function renderWeeklyReturns() {
         {ticker:'GOOGL',   name:'Alphabet',         type:'stock', currency:'USD', broker:'Saxo',   gak:163.20, aantal:28},
         {ticker:'SYM',     name:'Symbotic',         type:'stock', currency:'USD', broker:'Saxo',   gak:45.25,  aantal:9},
         {ticker:'RXRX',    name:'Recursion Pharmaceuticals',        type:'stock', currency:'USD', broker:'Saxo',   gak:5.73,   aantal:87},
-        {ticker:'ABAT',    name:'American Battery Technology Company',      type:'stock', currency:'USD', broker:'Saxo',   gak:5.85,   aantal:113},
         {ticker:'XPEV',    name:'XPeng',            type:'stock', currency:'USD', broker:'Saxo',   gak:22.94,  aantal:36},
         {ticker:'CRM',     name:'Salesforce',       type:'stock', currency:'USD', broker:'Saxo',   gak:250.38, aantal:2},
         {ticker:'ZENA',    name:'Zenatech',         type:'stock', currency:'USD', broker:'Saxo',   gak:2.68,   aantal:115},
@@ -4078,7 +4077,7 @@ function renderApFromEnriched(allEnriched) {
 
 // Cash per broker — eigen state op AANDELEN pagina (los van DATA → CASH pagina)
 // Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt)
-let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 4635, Saxo: 2838 };
+let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 2596, Saxo: 3152 };
 function saveApCash() { localStorage.setItem('ap_cash_v3', JSON.stringify(_apCash)); }
 
 function getCashForBroker(broker) {
