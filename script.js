@@ -473,7 +473,7 @@ function applyTimeFilter(chartKey) {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         document.getElementById(id).classList.add('active');
         if (el) el.classList.add('active');
-        const labels = { 'test-portfolio-page':'PORTFOLIO', 'data-page':'DATA', 'aandelen-page':'LIVE', 'heatmap-page':'HEATMAP', 'analyse-page':'ANALYSE', 'earnings-page':'EARNINGS' };
+        const labels = { 'test-portfolio-page':'PORTFOLIO', 'data-page':'DATA', 'aandelen-page':'LIVE', 'heatmap-page':'HEATMAP', 'analyse-page':'ANALYSE', 'earnings-page':'EARNINGS', 'doel-page':'DOEL' };
         const navLabel = document.querySelector('.nav span[style*="font-weight"]');
         if (navLabel) navLabel.textContent = labels[id] || '';
         closeNav();
@@ -482,6 +482,7 @@ function applyTimeFilter(chartKey) {
         if (id === 'heatmap-page') initHeatmapPage();
         if (id === 'analyse-page') initAnalysePage();
         if (id === 'earnings-page') initEarningsPage();
+        if (id === 'doel-page') initDoelPage();
 
         // LIVE pagina: slimme auto-refresh; stop bij verlaten
         if (_apAutoRefreshInterval) { clearInterval(_apAutoRefreshInterval); _apAutoRefreshInterval = null; }
@@ -1431,13 +1432,50 @@ function renderWeeklyReturns() {
                 if (dd < maxDD) maxDD = dd;
             });
 
-            return { best, worst, bestDate, worstDate, avg, stdDev, maxDD };
+            // Procentuele dagrendementen voor ratio-berekeningen
+            const pctReturns = brokerData.slice(1)
+                .map((d, i) => brokerData[i][b] > 0 ? (d[b] - brokerData[i][b]) / brokerData[i][b] : null)
+                .filter(v => v !== null && isFinite(v));
+
+            let annualVol = null, sharpe = null, sortino = null, winRate = null, calmar = null;
+
+            if (pctReturns.length > 5) {
+                const avgPct = pctReturns.reduce((a, v) => a + v, 0) / pctReturns.length;
+                const varPct = pctReturns.reduce((a, v) => a + Math.pow(v - avgPct, 2), 0) / pctReturns.length;
+                const stdPct = Math.sqrt(varPct);
+                annualVol = stdPct * Math.sqrt(252) * 100;
+
+                const annualReturn = avgPct * 252;
+                const RISK_FREE = 0.03; // 3% jaarlijks risicovrij rendement (EU)
+                sharpe = annualVol > 0 ? (annualReturn - RISK_FREE) / (annualVol / 100) : null;
+
+                const negReturns = pctReturns.filter(v => v < 0);
+                if (negReturns.length > 0) {
+                    const downsideStd = Math.sqrt(negReturns.reduce((a, v) => a + v * v, 0) / negReturns.length) * Math.sqrt(252);
+                    sortino = downsideStd > 0 ? (annualReturn - RISK_FREE) / downsideStd : null;
+                }
+
+                winRate = pctReturns.filter(v => v > 0).length / pctReturns.length * 100;
+
+                // Calmar ratio: CAGR / |maxDrawdown|
+                const firstEntry = brokerData.find(d => d[b] > 0);
+                const lastVal = brokerData[brokerData.length - 1][b];
+                if (firstEntry && lastVal > 0 && maxDD < 0) {
+                    const [fd, fm, fy] = firstEntry.date.split('/');
+                    const years = (new Date() - new Date(`${fy}-${fm.padStart(2,'0')}-${fd.padStart(2,'0')}`)) / (1000 * 60 * 60 * 24 * 365.25);
+                    const cagr = years > 0 ? (Math.pow(lastVal / firstEntry[b], 1 / years) - 1) * 100 : 0;
+                    calmar = Math.abs(maxDD) > 0 ? cagr / Math.abs(maxDD) : null;
+                }
+            }
+
+            return { best, worst, bestDate, worstDate, avg, stdDev, maxDD, annualVol, sharpe, sortino, winRate, calmar };
         });
 
         const isBlurred = () => document.querySelector('.blur-target') && document.querySelector('.blur-target').classList.contains('blur');
 
         const fmt = (v) => isBlurred() ? '€ •••' : (v >= 0 ? '+' : '') + formatEuro(v);
         const fmtAvg = (v) => isBlurred() ? '€ •••' : (v >= 0 ? '+' : '') + formatEuro(v);
+        const fmtRatio = (v) => v === null ? '—' : (v >= 0 ? '+' : '') + v.toFixed(2);
 
         const rows = [
             {
@@ -1466,17 +1504,66 @@ function renderWeeklyReturns() {
             },
             {
                 label: 'Max drawdown',
+                explain: 'Grootste daling van piek naar dal',
                 vals: stats.map(s => ({
                     main: s.maxDD.toFixed(2) + '%',
                     sub: '',
                     color: 'var(--danger)'
+                }))
+            },
+            {
+                label: 'Jaarl. volatiliteit',
+                explain: 'Dagelijkse schommelingen × √252',
+                vals: stats.map(s => ({
+                    main: s.annualVol !== null ? s.annualVol.toFixed(2) + '%' : '—',
+                    sub: 'std dev × √252',
+                    color: 'var(--text-main)'
+                }))
+            },
+            {
+                label: 'Win rate',
+                explain: '% handelsdagen met positief rendement',
+                vals: stats.map(s => ({
+                    main: s.winRate !== null ? s.winRate.toFixed(1) + '%' : '—',
+                    sub: '% positieve dagen',
+                    color: s.winRate !== null && s.winRate >= 50 ? 'var(--success)' : 'var(--text-main)'
+                }))
+            },
+            {
+                label: 'Sharpe ratio',
+                explain: 'Rendement boven risicovrije rente / totaal risico. ≥1 = goed',
+                vals: stats.map(s => ({
+                    main: fmtRatio(s.sharpe),
+                    sub: 'rf = 3%',
+                    color: s.sharpe === null ? 'var(--text-muted)' : s.sharpe >= 1 ? 'var(--success)' : s.sharpe >= 0 ? 'var(--text-main)' : 'var(--danger)'
+                }))
+            },
+            {
+                label: 'Sortino ratio',
+                explain: 'Zoals Sharpe, maar enkel neerwaarts risico telt mee. ≥1 = goed',
+                vals: stats.map(s => ({
+                    main: fmtRatio(s.sortino),
+                    sub: 'rf = 3%',
+                    color: s.sortino === null ? 'var(--text-muted)' : s.sortino >= 1 ? 'var(--success)' : s.sortino >= 0 ? 'var(--text-main)' : 'var(--danger)'
+                }))
+            },
+            {
+                label: 'Calmar ratio',
+                explain: 'Jaarlijks rendement (CAGR) gedeeld door max drawdown. ≥0.5 = goed',
+                vals: stats.map(s => ({
+                    main: fmtRatio(s.calmar),
+                    sub: 'CAGR / |maxDD|',
+                    color: s.calmar === null ? 'var(--text-muted)' : s.calmar >= 0.5 ? 'var(--success)' : s.calmar >= 0 ? 'var(--text-main)' : 'var(--danger)'
                 }))
             }
         ];
 
         tbody.innerHTML = rows.map(row => `
             <tr style="border-bottom:1px solid var(--border-color);">
-                <td style="padding:7px 2px;color:var(--text-muted);font-size:0.7rem;font-weight:600;">${row.label}</td>
+                <td style="padding:7px 2px;color:var(--text-muted);font-size:0.7rem;font-weight:600;">
+                    ${row.label}
+                    ${row.explain ? `<br><span style="color:var(--text-muted);font-size:0.6rem;font-weight:400;line-height:1.3;">${row.explain}</span>` : ''}
+                </td>
                 ${row.vals.map(v => `
                     <td style="padding:7px 2px;text-align:right;">
                         <span style="color:${v.color};font-weight:700;font-size:0.78rem;">${v.main}</span>
@@ -2488,7 +2575,7 @@ function renderWeeklyReturns() {
     // Echte posities pre-loaded: Bolero (3) + Degiro (24) + Saxo (15) = 42 posities
     // CleanSpark Call Jan'27 optie is overgeslagen (geen ticker te volgen via Yahoo)
     const DEFAULT_STOCKS = [
-        // ── BOLERO ──────────────────────────────────────────────────────────
+    // ── BOLERO ──────────────────────────────────────────────────────────
         {ticker:'NVDA',    name:'NVIDIA Corporation',           type:'stock', currency:'USD', broker:'Bolero', gak:14.67,  aantal:120},
         {ticker:'PYPL',    name:'PayPal Holdings',           type:'stock', currency:'USD', broker:'Bolero', gak:73.26,  aantal:29},
         {ticker:'BMNR',    name:'Bitmine Immersion Technologies',          type:'stock', currency:'USD', broker:'Bolero', gak:54.92,  aantal:66},
@@ -2531,7 +2618,6 @@ function renderWeeklyReturns() {
         {ticker:'RXRX',    name:'Recursion Pharmaceuticals',        type:'stock', currency:'USD', broker:'Saxo',   gak:5.73,   aantal:87},
         {ticker:'XPEV',    name:'XPeng',            type:'stock', currency:'USD', broker:'Saxo',   gak:22.94,  aantal:36},
         {ticker:'CRM',     name:'Salesforce',       type:'stock', currency:'USD', broker:'Saxo',   gak:250.38, aantal:2},
-        {ticker:'ZENA',    name:'Zenatech',         type:'stock', currency:'USD', broker:'Saxo',   gak:2.68,   aantal:115},
         // ── SAXO — ETFs ─────────────────────────────────────────────────────
         {ticker:'SGLD.MI', name:'Invesco Physical Gold',        type:'etf',   currency:'EUR', broker:'Saxo',   gak:295.07, aantal:3},
 
@@ -2548,7 +2634,6 @@ function renderWeeklyReturns() {
         {ticker:'TAO-USD', name:'Bittensor',        type:'crypto', currency:'USD', gak:0, aantal:11.97492815},
         {ticker:'HYPE',    name:'Hyperliquid',      type:'crypto', currency:'USD', gak:0, aantal:59.32749854},
     ];
-
     // localStorage key v2: bevat broker/gak/aantal velden + echte posities
     let hmStocks = JSON.parse(localStorage.getItem('hm_stocks_v2') || 'null') || DEFAULT_STOCKS;
     // Zorg dat bestaande entries altijd een type, gak, aantal en broker hebben (default 0 / Degiro)
@@ -4076,8 +4161,8 @@ function renderApFromEnriched(allEnriched) {
 }
 
 // Cash per broker — eigen state op AANDELEN pagina (los van DATA → CASH pagina)
-// Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt, DATA BROKER)
-let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 2048, Saxo: 1694 };
+// Default voorgevulde waarden (v2 key zodat oude lege state overschreven wordt. DATA BROKER )
+let _apCash = JSON.parse(localStorage.getItem('ap_cash_v3') || 'null') || { Bolero: 21, Degiro: 2048, Saxo: 1895 };
 function saveApCash() { localStorage.setItem('ap_cash_v3', JSON.stringify(_apCash)); }
 
 function getCashForBroker(broker) {
@@ -4224,26 +4309,26 @@ function renderAllPositions(positions, totalValue, containerId, sortOpts) {
             <colgroup>
                 <col style="width:78px;">
                 <col style="min-width:140px;">
-                <col style="width:110px;">
                 <col style="width:70px;">
                 <col style="width:80px;">
                 <col style="width:115px;">
-                <col style="width:80px;">
                 <col style="width:115px;">
                 <col style="width:80px;">
                 <col style="width:75px;">
+                <col style="width:110px;">
+                <col style="width:80px;">
             </colgroup>
             <thead><tr style="text-align:left;color:var(--text-muted);font-size:0.65rem;">
                 ${mkTh('ticker', 'TICKER', 'left')}
                 ${mkTh('name', 'NAAM', 'left')}
-                ${mkTh('sector', 'SECTOR', 'left')}
                 ${mkTh('aantal', 'AANTAL', 'right')}
                 ${mkTh('price', 'PRIJS', 'right')}
                 ${mkTh('valueEur', 'WAARDE €', 'right')}
-                <th style="${thBase}text-align:right;">% PORT.</th>
                 ${mkTh('plEur', 'P/L €', 'right')}
                 ${mkTh('plPct', 'P/L %', 'right')}
                 ${mkTh('dayPLPct', 'DAG %', 'right')}
+                ${mkTh('sector', 'SECTOR', 'right')}
+                <th style="${thBase}text-align:right;">POSITIE %</th>
             </tr></thead>
             <tbody>`;
 
@@ -4266,14 +4351,14 @@ function renderAllPositions(positions, totalValue, containerId, sortOpts) {
         html += `<tr style="border-bottom:1px solid var(--border-color);">
             <td style="${cellBase}font-weight:700;font-family:monospace;">${yahooTag}${p.ticker}</td>
             <td style="${cellBase}" title="${p.name}">${p.name}</td>
-            <td style="${cellBase}color:var(--text-muted);" title="${p.sector}">${p.sector}</td>
             <td style="${cellBase}text-align:right;">${(p.aantal || 0).toLocaleString('nl-NL', { maximumFractionDigits: 8 })}</td>
             <td style="${cellBase}text-align:right;">${priceStr}</td>
             <td class="blur-target" style="${cellBase}text-align:right;font-weight:700;">${noQ ? '<span style="color:var(--text-muted)">–</span>' : fmtEuroAlt(p.valueEur)}</td>
-            <td style="${cellBase}text-align:right;font-weight:700;">${noQ ? '–' : portPct.toFixed(2) + '%'}</td>
             <td class="blur-target" style="${cellBase}text-align:right;color:${plCol};font-weight:700;">${noQ ? '–' : (p.plEur >= 0 ? '+' : '') + fmtEuroAlt(p.plEur)}</td>
             <td style="${cellBase}text-align:right;color:${plCol};font-weight:800;">${p.plPct == null ? '–' : (p.plPct >= 0 ? '+' : '') + p.plPct.toFixed(2) + '%'}</td>
             <td style="${cellBase}text-align:right;color:${dpCol};font-weight:700;">${p.dayPLPct == null ? '–' : (p.dayPLPct >= 0 ? '+' : '') + p.dayPLPct.toFixed(2) + '%'}</td>
+            <td style="${cellBase}text-align:right;color:var(--text-muted);" title="${p.sector}">${p.sector}</td>
+            <td style="${cellBase}text-align:right;font-weight:700;">${noQ ? '–' : portPct.toFixed(2) + '%'}</td>
         </tr>`;
     });
 
@@ -6336,7 +6421,7 @@ function switchTpView(view, btn) {
     document.getElementById('tp-vernieuwen-btn').style.display = view === 'overzicht' ? '' : 'none';
     document.querySelectorAll('.tp-view-tab').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
-    if (view === 'periodeoverzicht')  { renderTpHeatmap(); renderTpMaandoverzicht(); renderTpWeekoverzicht(); }
+    if (view === 'periodeoverzicht')  { renderTpHeatmap(); renderTpMaandoverzicht(); renderTpWeekoverzicht(); renderTpDagoverzicht(); renderStatsTable(); }
 }
 
 // ── TEST RENDEMENT KALENDER (dagelijkse returns heatmap) ──────────────────────
@@ -6609,6 +6694,177 @@ function renderTpMaandoverzicht() {
             <td style="color:${color};">${jaarPerc !== null ? sign + jaarPerc.toFixed(2) + '%' : '–'}</td>
             <td></td></tr>`;
     }
+}
+
+// ── TEST DAGOVERZICHT ─────────────────────────────────────────────────────────
+const TP_DAG_BROKERS = ['all', 'Bolero', 'Degiro', 'Saxo'];
+const TP_DAG_LABELS  = { all:'TOTAAL', Bolero:'BOLERO', Degiro:'DEGIRO', Saxo:'SAXO' };
+const TP_DAG_NAMES   = ['Ma', 'Di', 'Wo', 'Do', 'Vr'];
+let tpDagBrokerIdx = 0;
+let tpDagWeekOffset = 0;
+
+function cycleTpDagBroker() {
+    tpDagBrokerIdx = (tpDagBrokerIdx + 1) % TP_DAG_BROKERS.length;
+    const broker = TP_DAG_BROKERS[tpDagBrokerIdx];
+    const btn = document.getElementById('tpDagBrokerBtn');
+    if (btn) btn.textContent = TP_DAG_LABELS[broker] + ' ▾';
+    renderTpDagoverzicht();
+}
+
+function renderTpDagoverzicht() {
+    const head    = document.getElementById('tpDagTableHead');
+    const body    = document.getElementById('tpDagTableBody');
+    const weekLbl = document.getElementById('tpDagWeekLabel');
+    if (!head || !body || !weekLbl) return;
+
+    const broker    = TP_DAG_BROKERS[tpDagBrokerIdx];
+    const brokerKey = broker === 'all' ? 'value' : broker.toLowerCase();
+    const isBlurred = document.querySelector('.blur-target')?.classList.contains('blur');
+    const getVal    = (entry) => entry[brokerKey] ?? null;
+
+    const isWeekday = d => { const dow = new Date(d + 'T12:00:00').getDay(); return dow !== 0 && dow !== 6; };
+    const allHistory = loadPortfolioHistory()
+        .filter(h => isWeekday(h.date) && getVal(h) != null)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Clamp offset: niet voorbij de toekomst
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayDow = today.getDay(); // 0=zo, 1=ma … 6=za
+    const daysFromMon = todayDow === 0 ? 6 : todayDow - 1;
+    const currentMonday = new Date(today);
+    currentMonday.setDate(today.getDate() - daysFromMon);
+
+    if (tpDagWeekOffset > 0) tpDagWeekOffset = 0;
+
+    // Maandag van de geselecteerde week
+    const selMonday = new Date(currentMonday);
+    selMonday.setDate(currentMonday.getDate() + tpDagWeekOffset * 7);
+
+    // Clamp: niet voor het eerste datapunt
+    if (allHistory.length > 0) {
+        const firstDate = new Date(allHistory[0].date + 'T12:00:00');
+        const firstDow  = firstDate.getDay();
+        const firstMon  = new Date(firstDate);
+        firstMon.setDate(firstDate.getDate() - (firstDow === 0 ? 6 : firstDow - 1));
+        if (selMonday < firstMon) {
+            tpDagWeekOffset++;
+            selMonday.setDate(selMonday.getDate() + 7);
+        }
+    }
+
+    // Genereer 5 werkdagen
+    const fmtIso = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+    };
+    const fmtShort = (iso) => { const [, m, d] = iso.split('-'); return `${d}/${m}`; };
+
+    const weekDays = [];
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(selMonday);
+        d.setDate(selMonday.getDate() + i);
+        weekDays.push(fmtIso(d));
+    }
+
+    weekLbl.textContent = `${fmtShort(weekDays[0])} – ${fmtShort(weekDays[4])}`;
+
+    head.innerHTML = `<tr>
+        <th style="text-align:left;">Dag</th>
+        <th style="text-align:left;">Datum</th>
+        <th style="text-align:right;">Rendement €</th>
+        <th style="text-align:right;">Rendement %</th>
+        <th style="text-align:right;">Eindwaarde</th>
+    </tr>`;
+
+    // Bouw lookup map
+    const byDate = {};
+    allHistory.forEach(h => { byDate[h.date] = h; });
+
+    // Vorige werkdag vóór maandag van deze week
+    const getPrevEntry = (isoDate) => {
+        const idx = allHistory.findIndex(h => h.date >= isoDate);
+        const before = idx > 0 ? allHistory[idx - 1] : (allHistory.length > 0 && allHistory[0].date < isoDate ? allHistory[allHistory.length - 1] : null);
+        // Zoek de laatste entry strikt vóór isoDate
+        let prev = null;
+        for (let i = allHistory.length - 1; i >= 0; i--) {
+            if (allHistory[i].date < isoDate) { prev = allHistory[i]; break; }
+        }
+        return prev;
+    };
+
+    let totalDiff = 0;
+    let hasAnyData = false;
+    const rows = [];
+
+    weekDays.forEach((iso, i) => {
+        const entry = byDate[iso];
+        const dayName = TP_DAG_NAMES[i];
+        const dateStr = fmtShort(iso);
+
+        if (!entry) {
+            rows.push(`<tr style="border-bottom:1px solid var(--border-color);">
+                <td style="font-weight:700;color:var(--text-muted);font-size:0.75rem;">${dayName}</td>
+                <td style="font-size:0.78rem;">${dateStr}</td>
+                <td colspan="3" style="text-align:right;color:var(--text-muted);font-size:0.75rem;">geen data</td>
+            </tr>`);
+            return;
+        }
+
+        const endVal = getVal(entry);
+        const prevEntry = getPrevEntry(iso);
+        const startVal  = prevEntry ? getVal(prevEntry) : null;
+
+        if (startVal === null) {
+            const eindStr = isBlurred ? '€ •••' : fmtEuroAlt(endVal, 0);
+            rows.push(`<tr style="border-bottom:1px solid var(--border-color);">
+                <td style="font-weight:700;color:var(--text-muted);font-size:0.75rem;">${dayName}</td>
+                <td style="font-size:0.78rem;">${dateStr}</td>
+                <td colspan="2" style="text-align:right;color:var(--text-muted);font-size:0.75rem;">geen vorige dag</td>
+                <td style="text-align:right;">${eindStr}</td>
+            </tr>`);
+            hasAnyData = true;
+            return;
+        }
+
+        const diff  = endVal - startVal;
+        const perc  = startVal !== 0 ? (diff / startVal) * 100 : null;
+        totalDiff  += diff;
+        hasAnyData  = true;
+        const color   = diff >= 0 ? 'var(--success)' : 'var(--danger)';
+        const sign    = diff >= 0 ? '+' : '';
+        const euroStr = isBlurred ? '€ •••' : `${sign}${fmtEuroAlt(diff, 0)}`;
+        const percStr = perc !== null ? `${sign}${perc.toFixed(2)}%` : '–';
+        const eindStr = isBlurred ? '€ •••' : fmtEuroAlt(endVal, 0);
+
+        rows.push(`<tr style="border-bottom:1px solid var(--border-color);">
+            <td style="font-weight:700;color:var(--text-muted);font-size:0.75rem;">${dayName}</td>
+            <td style="font-size:0.78rem;">${dateStr}</td>
+            <td style="text-align:right;color:${color};font-weight:700;">${euroStr}</td>
+            <td style="text-align:right;color:${color};font-weight:700;">${percStr}</td>
+            <td style="text-align:right;">${eindStr}</td>
+        </tr>`);
+    });
+
+    if (!hasAnyData) {
+        body.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">Geen data voor deze week</td></tr>`;
+        return;
+    }
+
+    // Totaalrij
+    const totalColor = totalDiff >= 0 ? 'var(--success)' : 'var(--danger)';
+    const totalSign  = totalDiff >= 0 ? '+' : '';
+    const totalStr   = isBlurred ? '€ •••' : `${totalSign}${fmtEuroAlt(totalDiff, 0)}`;
+    rows.push(`<tr style="border-top:2px solid var(--border-color);font-weight:700;">
+        <td colspan="2" style="font-size:0.75rem;color:var(--text-muted);">Week totaal</td>
+        <td style="text-align:right;color:${totalColor};">${totalStr}</td>
+        <td style="text-align:right;color:var(--text-muted);">–</td>
+        <td></td>
+    </tr>`);
+
+    body.innerHTML = rows.join('');
 }
 
 // ── TEST WEEKOVERZICHT ────────────────────────────────────────────────────────
@@ -6903,7 +7159,7 @@ async function initTestPortfolio(force = false) {
     if (_tpRetryTimeout) { clearTimeout(_tpRetryTimeout); _tpRetryTimeout = null; }
     const status = document.getElementById('testPfStatus');
     // Toon laadstatus alleen bij manuele vernieuwing (niet bij achtergrond auto-refresh)
-    if (force && status) status.textContent = '⏳ Laden…';
+    if (force && status) status.innerHTML = '<span class="tp-loading-spin">↻</span> Koersen laden…';
     // Bij expliciete vernieuwing: cache wissen zodat verse koersen worden opgehaald
     if (force) _quoteCache.clear();
 
@@ -7822,4 +8078,212 @@ function renderEarningsTable(rows) {
 
     html += '</tbody></table>';
     el.innerHTML = html;
+}
+
+// ── DOEL PAGINA ───────────────────────────────────────────────────────────────
+
+let _doelChart = null;
+
+function initDoelPage() {
+    const saved = getDoelData();
+    const hist = loadPortfolioHistory().filter(h => h.value != null);
+    const currentVal = hist.length > 0 ? hist[hist.length - 1].value : 0;
+
+    const startEl   = document.getElementById('doel-start');
+    const pctEl     = document.getElementById('doel-pct');
+    const monthlyEl = document.getElementById('doel-monthly');
+    const targetEl  = document.getElementById('doel-target');
+    const jarenEl   = document.getElementById('doel-jaren');
+    const jarenLbl  = document.getElementById('doel-jaren-label');
+
+    if (startEl)   startEl.value   = saved.calcStart   != null ? saved.calcStart   : Math.round(currentVal);
+    if (pctEl)     pctEl.value     = saved.calcPct     != null ? saved.calcPct     : 7;
+    if (monthlyEl) monthlyEl.value = saved.calcMonthly != null ? saved.calcMonthly : 0;
+    if (targetEl)  targetEl.value  = saved.calcTarget  != null ? saved.calcTarget  : '';
+    if (jarenEl) {
+        jarenEl.value = saved.calcJaren != null ? saved.calcJaren : 20;
+        if (jarenLbl) jarenLbl.textContent = jarenEl.value + ' jaar';
+        jarenEl.oninput = function () {
+            if (jarenLbl) jarenLbl.textContent = this.value + ' jaar';
+        };
+    }
+
+    if (saved.calcPct != null) renderDoelPage();
+}
+
+function doelFillPortfolio() {
+    const hist = loadPortfolioHistory().filter(h => h.value != null);
+    const val = hist.length > 0 ? Math.round(hist[hist.length - 1].value) : 0;
+    document.getElementById('doel-start').value = val;
+}
+
+function calcGrowth(start, annualPct, monthlyContrib, years) {
+    const r = annualPct / 100;
+    const rows = [];
+    let value = start;
+    let totalContrib = 0;
+
+    for (let y = 1; y <= years; y++) {
+        const startOfYear = value;
+        value = value * (1 + r) + monthlyContrib * 12;
+        totalContrib += monthlyContrib * 12;
+        const yearlyGain    = value - startOfYear;
+        const yearlyGainPct = startOfYear > 0 ? yearlyGain / startOfYear * 100 : 0;
+        const cumPct        = start > 0 ? (value - start - totalContrib) / start * 100 : 0;
+        rows.push({ year: y, value, yearlyGain, yearlyGainPct, cumPct, totalContrib });
+    }
+    return rows;
+}
+
+function renderDoelPage() {
+    const start   = parseFloat(document.getElementById('doel-start').value)   || 0;
+    const pct     = parseFloat(document.getElementById('doel-pct').value)     || 0;
+    const monthly = parseFloat(document.getElementById('doel-monthly').value) || 0;
+    const targetVal = parseFloat(document.getElementById('doel-target').value) || null;
+    const jaren   = parseInt(document.getElementById('doel-jaren').value)     || 20;
+
+    const d = getDoelData();
+    d.calcStart = start; d.calcPct = pct; d.calcMonthly = monthly;
+    d.calcTarget = targetVal; d.calcJaren = jaren;
+    saveDoelDataLS(d);
+
+    const pctPess = Math.max(0, pct - 2);
+    const pctOpt  = pct + 2;
+    const rowsBasis = calcGrowth(start, pct,     monthly, jaren);
+    const rowsPess  = calcGrowth(start, pctPess, monthly, jaren);
+    const rowsOpt   = calcGrowth(start, pctOpt,  monthly, jaren);
+
+    const finalBasis  = rowsBasis[rowsBasis.length - 1]?.value || start;
+    const totalContrib = monthly * 12 * jaren;
+    const totalGroei  = finalBasis - start - totalContrib;
+    const totalGroeiPct = start > 0 ? totalGroei / start * 100 : 0;
+
+    // When is target reached?
+    let targetJaar = null;
+    if (targetVal && targetVal > start) {
+        const longRows = calcGrowth(start, pct, monthly, 100);
+        const hit = longRows.find(r => r.value >= targetVal);
+        if (hit) targetJaar = hit.year;
+    }
+
+    // Summary
+    document.getElementById('doel-summary').style.display = '';
+    document.getElementById('doel-sum-eindwaarde').textContent = fmtEuroAlt(finalBasis, 0);
+    document.getElementById('doel-sum-jaar').textContent       = `na ${jaren} jaar`;
+    document.getElementById('doel-sum-groei').textContent      = fmtEuroAlt(totalGroei, 0);
+    document.getElementById('doel-sum-groeipct').textContent   = `+${totalGroeiPct.toFixed(1)}% op startbedrag`;
+    document.getElementById('doel-sum-bijstort').textContent   = fmtEuroAlt(totalContrib, 0);
+
+    const targetCard = document.getElementById('doel-sum-target-card');
+    if (targetVal) {
+        targetCard.style.display = '';
+        document.getElementById('doel-sum-target-jaar').textContent = targetJaar ? `jaar ${targetJaar}` : '> 100 jaar';
+    } else {
+        targetCard.style.display = 'none';
+    }
+
+    // Chart
+    document.getElementById('doel-chart-card').style.display = '';
+    const isDark    = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const tickColor = '#8e9196';
+    const labels    = rowsBasis.map(r => `Jaar ${r.year}`);
+
+    const datasets = [
+        {
+            label: `Optimistisch (${pctOpt.toFixed(1)}%)`,
+            data: rowsOpt.map(r => r.value),
+            borderColor: 'rgba(46,204,113,0.6)',
+            backgroundColor: 'transparent',
+            borderDash: [5, 4],
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.3
+        },
+        {
+            label: `Basis (${pct.toFixed(1)}%)`,
+            data: rowsBasis.map(r => r.value),
+            borderColor: '#3498db',
+            backgroundColor: 'rgba(52,152,219,0.08)',
+            fill: true,
+            borderWidth: 2.5,
+            pointRadius: 0,
+            tension: 0.3
+        },
+        {
+            label: `Pessimistisch (${pctPess.toFixed(1)}%)`,
+            data: rowsPess.map(r => r.value),
+            borderColor: 'rgba(231,76,60,0.6)',
+            backgroundColor: 'transparent',
+            borderDash: [5, 4],
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.3
+        }
+    ];
+
+    if (targetVal) {
+        datasets.push({
+            label: `Doel (${fmtEuroAlt(targetVal, 0)})`,
+            data: new Array(jaren).fill(targetVal),
+            borderColor: 'rgba(255,193,7,0.8)',
+            backgroundColor: 'transparent',
+            borderDash: [8, 4],
+            borderWidth: 1.5,
+            pointRadius: 0
+        });
+    }
+
+    const ctx = document.getElementById('doel-chart').getContext('2d');
+    if (_doelChart) { _doelChart.destroy(); _doelChart = null; }
+    _doelChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, labels: { color: tickColor, boxWidth: 20, padding: 14, font: { size: 11 } } },
+                datalabels: { display: false },
+                tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtEuroAlt(c.raw, 0)}` } }
+            },
+            scales: {
+                x: { grid: { color: gridColor }, ticks: { color: tickColor, maxTicksLimit: 11, font: { size: 10 } } },
+                y: {
+                    grid: { color: gridColor },
+                    ticks: { color: tickColor, font: { size: 10 }, callback: v => fmtEuroAlt(v, 0) }
+                }
+            }
+        }
+    });
+
+    // Table
+    document.getElementById('doel-table-card').style.display = '';
+    const tbl = document.getElementById('doel-table');
+    let html = `<thead><tr style="background:var(--bg-color);">
+        <th style="padding:10px 14px;text-align:left;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Jaar</th>
+        <th style="padding:10px 14px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Waarde</th>
+        <th style="padding:10px 14px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Jaarlijkse groei (€)</th>
+        <th style="padding:10px 14px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Jaarlijkse groei (%)</th>
+        <th style="padding:10px 14px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Rendement op start</th>
+        <th style="padding:10px 14px;text-align:right;font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">Totale bijstortingen</th>
+    </tr></thead><tbody>`;
+
+    rowsBasis.forEach((r, i) => {
+        const isTargetHit = targetVal && r.value >= targetVal && (i === 0 || rowsBasis[i - 1].value < targetVal);
+        const rowBg = isTargetHit
+            ? 'background:rgba(46,204,113,0.1);'
+            : i % 2 === 1 ? 'background:var(--bg-color);' : '';
+        html += `<tr style="${rowBg}border-bottom:1px solid var(--border-color);">
+            <td style="padding:9px 14px;font-weight:700;">${r.year}${isTargetHit ? ' 🎯' : ''}</td>
+            <td style="padding:9px 14px;text-align:right;font-weight:800;color:var(--success);" class="blur-target">${fmtEuroAlt(r.value, 0)}</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--success);" class="blur-target">+${fmtEuroAlt(r.yearlyGain, 0)}</td>
+            <td style="padding:9px 14px;text-align:right;">+${r.yearlyGainPct.toFixed(2)}%</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--text-muted);">+${r.cumPct.toFixed(1)}%</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--text-muted);" class="blur-target">${fmtEuroAlt(r.totalContrib, 0)}</td>
+        </tr>`;
+    });
+
+    html += '</tbody>';
+    tbl.innerHTML = html;
 }
